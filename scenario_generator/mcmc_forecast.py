@@ -12,29 +12,7 @@ import jax.numpy as jnp
 import jax.random as random
 from numpyro.infer import MCMC, NUTS, Predictive
 
-# TODO: path append can be removed when mechafil is converted to a python module
-import sys
-sys.path.append('../filecoin-mecha-twin')
-from mechafil.data import query_starboard_daily_power_onboarded
-
-
-def sanity_check_date(date_in: datetime.date, err_msg = None):
-    today = datetime.datetime.now().date()
-    if date_in > today:
-        err_msg_out = err_msg if err_msg is not None else "Supplied date is after today: %s" % (today, )
-        raise ValueError(err_msg)
-
-
-def err_check_train_data(y_train: jnp.array):
-    # TODO: improve this to check for "anomalous" data such as a consecutive series of 0's
-    #  rather than this basic version
-    if len(jnp.where(y_train == 0)[0]) > 3:
-        raise ValueError("Starboard data may not be fully populated, \
-                          because some onboarded-rb-power data is downloaded as 0!")
-
-def make_forecast_date_vec(forecast_start_date: datetime.date, forecast_length: int):
-    forecast_date_vec = [datetime.timedelta(days=int(x))+forecast_start_date for x in np.arange(forecast_length)]
-    return forecast_date_vec
+import scenario_generator.utils as u
 
 # https://num.pyro.ai/en/stable/tutorials/time_series_forecasting.html 
 def sgt(y, seasonality, future=0):
@@ -122,17 +100,6 @@ def mcmc_predict(y_train: jnp.array,
     return predict_dist
 
 
-def get_historical_daily_onboarded_power(start_date: datetime.date,
-                                         end_date: datetime.date):
-    sanity_check_date(start_date, err_msg="Specified start_date is after today!")
-    sanity_check_date(end_date, err_msg="Specified end_date is after today!")
-
-    onboards_df = query_starboard_daily_power_onboarded(start_date, end_date)
-    t_vec = pd.to_datetime(onboards_df.date)
-    rb_onboard_vec = onboards_df['day_onboarded_rb_power_pib']
-    return t_vec, rb_onboard_vec
-
-
 def forecast_rb_onboard_power(train_start_date: datetime.date, 
                               train_end_date: datetime.date,
                               forecast_length: int,
@@ -140,12 +107,12 @@ def forecast_rb_onboard_power(train_start_date: datetime.date,
                               num_samples_mcmc: int = 100,
                               seasonality_mcmc: int = 1000,
                               num_chains_mcmc: int = 2):
-    sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
-    sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
+    u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
+    u.sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
-    x, y = get_historical_daily_onboarded_power(train_start_date, train_end_date)
+    x, y = u.get_historical_daily_onboarded_power(train_start_date, train_end_date)
     y_train = jnp.array(y)
-    err_check_train_data(y_train)
+    u.err_check_train_data(y_train)
     
     rb_onboard_power_pred = mcmc_predict(y_train, forecast_length,
                                          num_warmup_mcmc=num_warmup_mcmc, 
@@ -154,7 +121,7 @@ def forecast_rb_onboard_power(train_start_date: datetime.date,
                                          num_chains_mcmc=num_chains_mcmc)
     
     forecast_start_date = train_end_date + datetime.timedelta(days=1)
-    forecast_date_vec = make_forecast_date_vec(forecast_start_date, forecast_length)
+    forecast_date_vec = u.make_forecast_date_vec(forecast_start_date, forecast_length)
     return forecast_date_vec, rb_onboard_power_pred, x, y
 
 """
@@ -178,8 +145,8 @@ def forecast_extensions(train_start_date: datetime.date,
                         num_samples_mcmc: int = 100,
                         seasonality_mcmc: int = 1000,
                         num_chains_mcmc: int = 2):
-    sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
-    sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
+    u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
+    u.sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
     df = pd.read_csv('offline_info/Scheduled_Expiration_by_Date_Breakdown_in_PiB.csv')
     df = df[df.stateTime <= str(train_end_date)]
@@ -191,7 +158,7 @@ def forecast_extensions(train_start_date: datetime.date,
     x = pd.to_datetime(df.stateTime)
     y = df['Extend']
     y_train = jnp.array(y)
-    err_check_train_data(y_train)
+    u.err_check_train_data(y_train)
 
     extensions_pred = mcmc_predict(y_train, forecast_length,
                                    num_warmup_mcmc=num_warmup_mcmc, 
@@ -200,7 +167,7 @@ def forecast_extensions(train_start_date: datetime.date,
                                    num_chains_mcmc=num_chains_mcmc)
     
     forecast_start_date = train_end_date + datetime.timedelta(days=1)
-    forecast_date_vec = make_forecast_date_vec(forecast_start_date, forecast_length)
+    forecast_date_vec = u.make_forecast_date_vec(forecast_start_date, forecast_length)
     return forecast_date_vec, extensions_pred, x, y
 
 def forecast_expirations(train_start_date: datetime.date, 
@@ -210,8 +177,8 @@ def forecast_expirations(train_start_date: datetime.date,
                          num_samples_mcmc: int = 100,
                          seasonality_mcmc: int = 1000,
                          num_chains_mcmc: int = 2):
-    sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
-    sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
+    u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
+    u.sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
     df = pd.read_csv('offline_info/Scheduled_Expiration_by_Date_Breakdown_in_PiB.csv')
     df = df[df.stateTime <= str(train_end_date)]
@@ -223,7 +190,7 @@ def forecast_expirations(train_start_date: datetime.date,
     x = pd.to_datetime(df.stateTime)
     y = df['Expired']
     y_train = jnp.array(y)
-    err_check_train_data(y_train)
+    u.err_check_train_data(y_train)
 
     expire_pred = mcmc_predict(y_train, forecast_length,
                                num_warmup_mcmc=num_warmup_mcmc, 
@@ -232,7 +199,7 @@ def forecast_expirations(train_start_date: datetime.date,
                                num_chains_mcmc=num_chains_mcmc)
     
     forecast_start_date = train_end_date + datetime.timedelta(days=1)
-    forecast_date_vec = make_forecast_date_vec(forecast_start_date, forecast_length)
+    forecast_date_vec = u.make_forecast_date_vec(forecast_start_date, forecast_length)
     return forecast_date_vec, expire_pred, x, y
 
 def forecast_renewal_rate(train_start_date: datetime.date, 
@@ -242,8 +209,8 @@ def forecast_renewal_rate(train_start_date: datetime.date,
                           num_samples_mcmc: int = 100,
                           seasonality_mcmc: int = 1000,
                           num_chains_mcmc: int = 2):
-    sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
-    sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
+    u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
+    u.anity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
     forecast_date_vec, extensions_pred, x_extend, y_extend = forecast_extensions(train_start_date, 
                                                                                  train_end_date,
@@ -280,8 +247,8 @@ def forecast_filplus_rate(train_start_date: datetime.date,
     3. forecast cc_onboard --> cc_onboard_dist
     4. find fil_plus_rate_dist =  deal_onboard_dist / (cc_onboard_dist + deal_onboard_dist)
     """
-    sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
-    sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
+    u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
+    u.sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
     df = pd.read_csv('offline_info/Daily_Active_Deal_TiB_Change_Breakdown.csv')
     df['deals_onboard'] = df['New Active Deal'] / 1024
@@ -295,10 +262,10 @@ def forecast_filplus_rate(train_start_date: datetime.date,
     x_deal_onboard_train = pd.to_datetime(df.stateTime)
     y = df.deals_onboard
     y_deal_onboard_train = jnp.array(y)
-    err_check_train_data(y_deal_onboard_train)
+    u.err_check_train_data(y_deal_onboard_train)
 
     x_rb_onboard_train, y_rb_onboard_train = \
-        get_historical_daily_onboarded_power(train_start_date, train_end_date)
+        u.get_historical_daily_onboarded_power(train_start_date, train_end_date)
     train_start_date = pd.to_datetime(max(x_deal_onboard_train.values[0], x_rb_onboard_train.values[0]))
     train_end_date = pd.to_datetime(min(x_deal_onboard_train.values[-1], x_rb_onboard_train.values[-1]))
 
@@ -316,7 +283,7 @@ def forecast_filplus_rate(train_start_date: datetime.date,
                                      seasonality_mcmc=seasonality_mcmc, 
                                      num_chains_mcmc=num_chains_mcmc)
     forecast_start_date = train_end_date + datetime.timedelta(days=1)
-    forecast_date_vec = make_forecast_date_vec(forecast_start_date, forecast_length)
+    forecast_date_vec = u.make_forecast_date_vec(forecast_start_date, forecast_length)
 
     y_cc_onboard_train = jnp.array(y_rb_onboard_train - y_deal_onboard_train)
     cc_onboard_pred = mcmc_predict(y_cc_onboard_train, forecast_length,
@@ -329,3 +296,4 @@ def forecast_filplus_rate(train_start_date: datetime.date,
     yy = y_deal_onboard_train / (y_cc_onboard_train + y_deal_onboard_train)
     filplus_rate_pred = deal_onboard_pred / (cc_onboard_pred + deal_onboard_pred)
     return forecast_date_vec, filplus_rate_pred, xx, yy
+
