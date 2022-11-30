@@ -148,15 +148,7 @@ def forecast_extensions(train_start_date: datetime.date,
     u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
     u.sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
-    df = pd.read_csv('offline_info/Scheduled_Expiration_by_Date_Breakdown_in_PiB.csv')
-    df = df[df.stateTime <= str(train_end_date)]
-    # NOTE: this can be removed when we upgrade this to get data directly from starboard
-    num_days_train = train_end_date - train_start_date
-    num_days_train = int(num_days_train.days)
-    df = df.iloc[-num_days_train:]
-
-    x = pd.to_datetime(df.stateTime)
-    y = df['Extend']
+    x, y = u.get_historical_extensions(train_start_date, train_end_date)
     y_train = jnp.array(y)
     u.err_check_train_data(y_train)
 
@@ -180,15 +172,7 @@ def forecast_expirations(train_start_date: datetime.date,
     u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
     u.sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
-    df = pd.read_csv('offline_info/Scheduled_Expiration_by_Date_Breakdown_in_PiB.csv')
-    df = df[df.stateTime <= str(train_end_date)]
-    # NOTE: this can be removed when we upgrade this to get data directly from starboard
-    num_days_train = train_end_date - train_start_date
-    num_days_train = int(num_days_train.days)
-    df = df.iloc[-num_days_train:]
-
-    x = pd.to_datetime(df.stateTime)
-    y = df['Expired']
+    x, y = u.get_historical_expirations(train_start_date, train_end_date)
     y_train = jnp.array(y)
     u.err_check_train_data(y_train)
 
@@ -210,7 +194,7 @@ def forecast_renewal_rate(train_start_date: datetime.date,
                           seasonality_mcmc: int = 1000,
                           num_chains_mcmc: int = 2):
     u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
-    u.anity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
+    u.sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
     forecast_date_vec, extensions_pred, x_extend, y_extend = forecast_extensions(train_start_date, 
                                                                                  train_end_date,
@@ -250,17 +234,7 @@ def forecast_filplus_rate(train_start_date: datetime.date,
     u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
     u.sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
-    df = pd.read_csv('offline_info/Daily_Active_Deal_TiB_Change_Breakdown.csv')
-    df['deals_onboard'] = df['New Active Deal'] / 1024
-    df = df[df.stateTime <= str(train_end_date)]
-    # NOTE: this can be removed when we upgrade this to get data directly from starboard
-    num_days_train = train_end_date - train_start_date
-    num_days_train = int(num_days_train.days)
-    df = df.iloc[-num_days_train:]
-
-    # time-align the multiple predictions we are about to make
-    x_deal_onboard_train = pd.to_datetime(df.stateTime)
-    y = df.deals_onboard
+    x_deal_onboard_train, y = u.get_historical_deals_onboard(train_start_date, train_end_date)
     y_deal_onboard_train = jnp.array(y)
     u.err_check_train_data(y_deal_onboard_train)
 
@@ -269,11 +243,13 @@ def forecast_filplus_rate(train_start_date: datetime.date,
     train_start_date = pd.to_datetime(max(x_deal_onboard_train.values[0], x_rb_onboard_train.values[0]))
     train_end_date = pd.to_datetime(min(x_deal_onboard_train.values[-1], x_rb_onboard_train.values[-1]))
 
-    ii_start = np.where(train_start_date==x_deal_onboard_train.values)[0][0]
-    ii_end = np.where(train_end_date==x_deal_onboard_train.values)[0][0]
-
+    ii_start = np.where(train_start_date==x_rb_onboard_train.values)[0][0]
+    ii_end = np.where(train_end_date==x_rb_onboard_train.values)[0][0]
     x_rb_onboard_train = x_rb_onboard_train[ii_start:ii_end]
     y_rb_onboard_train = y_rb_onboard_train[ii_start:ii_end]
+
+    ii_start = np.where(train_start_date==x_deal_onboard_train.values)[0][0]
+    ii_end = np.where(train_end_date==x_deal_onboard_train.values)[0][0]
     x_deal_onboard_train = x_deal_onboard_train[ii_start:ii_end]
     y_deal_onboard_train = y_deal_onboard_train[ii_start:ii_end]
 

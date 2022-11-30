@@ -1,10 +1,13 @@
 import datetime
+import pandas as pd
+import numpy as np
 import jax.numpy as jnp
 
-# TODO: path append can be removed when mechafil is converted to a python module
+# TODO: remove when mechafil is converted to a python module
 import sys
 sys.path.append('../filecoin-mecha-twin')
-from mechafil.data import query_starboard_daily_power_onboarded
+from mechafil.data import query_starboard_daily_power_onboarded, \
+                          query_starboard_sector_expirations
 
 
 def sanity_check_date(date_in: datetime.date, err_msg = None):
@@ -34,3 +37,77 @@ def get_historical_daily_onboarded_power(start_date: datetime.date,
     t_vec = pd.to_datetime(onboards_df.date)
     rb_onboard_vec = onboards_df['day_onboarded_rb_power_pib']
     return t_vec, rb_onboard_vec
+
+def get_historical_renewal_rate(start_date: datetime.date,
+                                end_date: datetime.date):
+    sector_expirations_df = query_starboard_sector_expirations(start_date, end_date)
+    t_vec = pd.to_datetime(sector_expirations_df.date)
+
+    historical_renewal_rate = sector_expirations_df['extended_rb'] / (sector_expirations_df['extended_rb'] + sector_expirations_df['expired_rb'] + sector_expirations_df['open_rb'])
+    historical_renewal_rate = historical_renewal_rate.values
+    
+    return t_vec, historical_renewal_rate
+
+def get_historical_extensions(start_date: datetime.date,
+                              end_date: datetime.date):
+    df = pd.read_csv('offline_info/Scheduled_Expiration_by_Date_Breakdown_in_PiB.csv')
+    df = df[df.stateTime <= str(end_date)]
+    # NOTE: this can be removed when we upgrade this to get data directly from starboard
+    num_days_train = end_date - start_date
+    num_days_train = int(num_days_train.days)
+    df = df.iloc[-num_days_train:]
+
+    t_vec = pd.to_datetime(df.stateTime)
+    extend_vec = df['Extend'].values
+
+    return t_vec, extend_vec
+
+def get_historical_expirations(start_date: datetime.date,
+                               end_date: datetime.date):
+    df = pd.read_csv('offline_info/Scheduled_Expiration_by_Date_Breakdown_in_PiB.csv')
+    df = df[df.stateTime <= str(end_date)]
+    # NOTE: this can be removed when we upgrade this to get data directly from starboard
+    num_days_train = end_date - start_date
+    num_days_train = int(num_days_train.days)
+    df = df.iloc[-num_days_train:]
+
+    t_vec = pd.to_datetime(df.stateTime)
+    expire_vec = df['Expired'].values
+
+    return t_vec, expire_vec
+
+def get_historical_deals_onboard(start_date: datetime.date,
+                                 end_date: datetime.date):
+    df = pd.read_csv('offline_info/Daily_Active_Deal_TiB_Change_Breakdown.csv')
+    df['deals_onboard'] = df['New Active Deal'] / 1024
+    df = df[df.stateTime <= str(end_date)]
+    # NOTE: this can be removed when we upgrade this to get data directly from starboard
+    num_days_train = end_date - start_date
+    num_days_train = int(num_days_train.days)
+    df = df.iloc[-num_days_train:]
+
+    t_vec = pd.to_datetime(df.stateTime)
+    deals_onboard_vec = df.deals_onboard.values
+
+    return t_vec, deals_onboard_vec
+
+def get_historical_filplus_rate(start_date: datetime.date,
+                                end_date: datetime.date):
+    rb_onboard_t_vec, rb_onboard_vec = get_historical_daily_onboarded_power(start_date, end_date)
+    deal_onboard_t_vec, deal_onboard_vec = get_historical_deals_onboard(start_date, end_date)
+
+    # align the data
+    start_date_aligned = pd.to_datetime(max(deal_onboard_t_vec.values[0], rb_onboard_t_vec.values[0]))
+    end_date_aligned = pd.to_datetime(min(deal_onboard_t_vec.values[-1], rb_onboard_t_vec.values[-1]))
+
+    ii_start = np.where(start_date_aligned==rb_onboard_t_vec.values)[0][0]
+    ii_end = np.where(end_date_aligned==rb_onboard_t_vec.values)[0][0]
+    rb_onboard_vec_aligned = rb_onboard_vec[ii_start:ii_end]
+
+    ii_start = np.where(start_date_aligned==deal_onboard_t_vec.values)[0][0]
+    ii_end = np.where(end_date_aligned==deal_onboard_t_vec.values)[0][0]
+    deal_onboard_vec_aligned = deal_onboard_vec[ii_start:ii_end]
+
+    t_vec_aligned = deal_onboard_t_vec[ii_start:ii_end]
+    historical_filplus_rate = deal_onboard_vec_aligned/rb_onboard_vec_aligned
+    return t_vec_aligned, historical_filplus_rate
