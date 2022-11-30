@@ -35,7 +35,7 @@ def get_historical_daily_onboarded_power(start_date: datetime.date,
 
     onboards_df = query_starboard_daily_power_onboarded(start_date, end_date)
     t_vec = pd.to_datetime(onboards_df.date)
-    rb_onboard_vec = onboards_df['day_onboarded_rb_power_pib']
+    rb_onboard_vec = onboards_df['day_onboarded_rb_power_pib'].values
     return t_vec, rb_onboard_vec
 
 def get_historical_renewal_rate(start_date: datetime.date,
