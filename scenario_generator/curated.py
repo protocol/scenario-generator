@@ -7,6 +7,9 @@ import numpy as np
 
 import scenario_generator.utils as u
 
+NETWORK_START_DATE = datetime.date(2020, 10, 15)
+FAST_NUM_DAYS_TO_TARGET = 15
+
 def fit_exponential(x1, y1, x2, y2):
     # Solves y = a*b^x for given points (x1, y1) and (x2, y2)
     # https://math.stackexchange.com/a/3276964
@@ -14,25 +17,36 @@ def fit_exponential(x1, y1, x2, y2):
     a = y1/(b**x1)
     return a, b
 
+def smooth_fast_exponential_change_and_plateau(start_value: float, 
+                                               target_value: float, 
+                                               forecast_length: int, 
+                                               num_days_to_target: int):
+    t = np.arange(forecast_length)
+    a, b = fit_exponential(t[0], start_value, t[num_days_to_target], target_value)
+    x1 = a*np.power(b, t[0:num_days_to_target])
+    x2 = target_value * np.ones(forecast_length - num_days_to_target)
+    x = np.concatenate([x1, x2])
+    return x
+
 def forecast_historical_median_renewal_rate(start_date: datetime.date,
                                             end_date: datetime.date,
                                             forecast_length: int):
     _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, end_date)
-    forecasted_renewal_rate = np.ones(forecast_length) * np.median(historical_renewal_rate)
+    forecasted_renewal_rate = np.ones(forecast_length) * np.nanmedian(historical_renewal_rate)
     return forecasted_renewal_rate
 
 def forecast_historical_median_filplus_rate(start_date: datetime.date,
                                             end_date: datetime.date,
                                             forecast_length: int):
     _, historical_filplus_rate = u.get_historical_filplus_rate(start_date, end_date)
-    forecasted_filplus_rate = np.ones(forecast_length) * np.median(historical_filplus_rate)
+    forecasted_filplus_rate = np.ones(forecast_length) * np.nanmedian(historical_filplus_rate)
     return forecasted_filplus_rate
 
 def forecast_historical_median_rbonboard_power(start_date: datetime.date,
                                                end_date: datetime.date,
                                                forecast_length: int):
     _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, end_date)
-    forecasted_rbonboard_pw = np.ones(forecast_length) * np.median(historical_rbonboard_pw)
+    forecasted_rbonboard_pw = np.ones(forecast_length) * np.nanmedian(historical_rbonboard_pw)
     return forecasted_rbonboard_pw
 
 def forecast_rbonboard_power_multiplyfactor(start_value: float,
@@ -65,7 +79,7 @@ def forecast_filplus_expcurve_from_date(start_date: datetime.date,
 def forecast_optimistic_scenario(forecast_length: int):
     OPTIMISTIC_VAL = 0.99
 
-    start_date = datetime.date(2020, 10, 15) # start of network
+    start_date = NETWORK_START_DATE
     today = datetime.datetime.now().date() - datetime.timedelta(days=1)
     _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
     historical_max_rbonboard = np.max(historical_rbonboard_pw)
@@ -82,7 +96,7 @@ def forecast_optimistic_scenario(forecast_length: int):
 def forecast_optimistic_scenario_smooth(forecast_length: int):
     OPTIMISTIC_VAL = 0.999
 
-    start_date = datetime.date(2020, 10, 15) # start of network
+    start_date = NETWORK_START_DATE
     today = datetime.datetime.now().date() - datetime.timedelta(days=10)
     _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
     historical_max_rbonboard = np.max(historical_rbonboard_pw)
@@ -118,7 +132,7 @@ def forecast_pessimistic_scenario(forecast_length: int):
 def forecast_pessimistic_scenario_smooth(forecast_length: int):
     PESSIMISTIC_VAL = 0.01
 
-    start_date = datetime.date(2020, 10, 15) # start of network
+    start_date = NETWORK_START_DATE
     today = datetime.datetime.now().date() - datetime.timedelta(days=10)
     _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
     historical_min_rbonboard = np.min(historical_rbonboard_pw)
@@ -131,6 +145,303 @@ def forecast_pessimistic_scenario_smooth(forecast_length: int):
     renewal_rate_forecast = a*np.power(b, t)
 
     fil_plus_rate_forecast = forecast_filplus_expcurve_from_date(today, PESSIMISTIC_VAL, forecast_length)
+
+    return {
+        'rb_onboard_power': rb_onboard_power_forecast, 
+        'renewal_rate': renewal_rate_forecast,
+        'filplus_rate': fil_plus_rate_forecast
+    }
+
+def forecast_historical_median_scenario(forecast_length: int):
+    start_date = NETWORK_START_DATE
+    today = datetime.datetime.now().date() - datetime.timedelta(days=10)
+    
+    renewal_rate_forecast = forecast_historical_median_renewal_rate(start_date,
+                                                                    today,
+                                                                    forecast_length)
+    fil_plus_rate_forecast = forecast_historical_median_filplus_rate(start_date,
+                                                                     today,
+                                                                     forecast_length)
+    rb_onboard_power_forecast = forecast_historical_median_rbonboard_power(start_date,
+                                                                           today,
+                                                                           forecast_length)
+
+    return {
+        'rb_onboard_power': rb_onboard_power_forecast, 
+        'renewal_rate': renewal_rate_forecast,
+        'filplus_rate': fil_plus_rate_forecast
+    }
+
+def forecast_current_value_scenario(forecast_length: int):
+    today = datetime.datetime.now().date() - datetime.timedelta(days=10)
+    start_date = today - datetime.timedelta(days=10)
+    
+    _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
+    rb_onboard_power_forecast = historical_rbonboard_pw[-1] * np.ones(forecast_length)
+
+    _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
+    renewal_rate_forecast = historical_renewal_rate[-1] * np.ones(forecast_length)
+
+    _, historical_filplus_rate = u.get_historical_filplus_rate(start_date, today)
+    fil_plus_rate_forecast = historical_filplus_rate[-1] * np.ones(forecast_length)
+
+    return {
+        'rb_onboard_power': rb_onboard_power_forecast, 
+        'renewal_rate': renewal_rate_forecast,
+        'filplus_rate': fil_plus_rate_forecast
+    }
+
+def forecast_onboard_current_rr_high_fpr_median_scenario(forecast_length: int):
+    start_date = NETWORK_START_DATE
+    today = datetime.datetime.now().date() - datetime.timedelta(days=10)
+
+    _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
+    rb_onboard_power_forecast = historical_rbonboard_pw[-1] * np.ones(forecast_length)
+
+
+    _, historical_filplus_rate = u.get_historical_filplus_rate(start_date, today)
+    historical_median_filplus_rate = np.nanmedian(historical_filplus_rate)
+    current_filplus_rate = historical_filplus_rate[-1]
+    fil_plus_rate_forecast = smooth_fast_exponential_change_and_plateau(current_filplus_rate,
+                                                                        historical_median_filplus_rate,
+                                                                        forecast_length,
+                                                                        FAST_NUM_DAYS_TO_TARGET)
+
+    # increase renewal-rate exponentially very quickly to max-value
+    MAX_RR = 0.99
+    _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
+    renewal_rate_forecast = smooth_fast_exponential_change_and_plateau(historical_renewal_rate[-1],
+                                                                       MAX_RR,
+                                                                       forecast_length,
+                                                                       FAST_NUM_DAYS_TO_TARGET)
+    return {
+        'rb_onboard_power': rb_onboard_power_forecast, 
+        'renewal_rate': renewal_rate_forecast,
+        'filplus_rate': fil_plus_rate_forecast
+    }
+
+def forecast_onboard_current_rr_low_fpr_median_scenario(forecast_length: int):
+    start_date = NETWORK_START_DATE
+    today = datetime.datetime.now().date() - datetime.timedelta(days=10)
+
+    _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
+    rb_onboard_power_forecast = historical_rbonboard_pw[-1] * np.ones(forecast_length)
+
+    _, historical_filplus_rate = u.get_historical_filplus_rate(start_date, today)
+    historical_median_filplus_rate = np.nanmedian(historical_filplus_rate)
+    current_filplus_rate = historical_filplus_rate[-1]
+    fil_plus_rate_forecast = smooth_fast_exponential_change_and_plateau(current_filplus_rate,
+                                                                        historical_median_filplus_rate,
+                                                                        forecast_length,
+                                                                        FAST_NUM_DAYS_TO_TARGET)
+
+    # increase renewal-rate exponentially very quickly to max-value
+    MIN_RR = 0.01
+    _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
+    renewal_rate_forecast = smooth_fast_exponential_change_and_plateau(historical_renewal_rate[-1],
+                                                                       MIN_RR,
+                                                                       forecast_length,
+                                                                       FAST_NUM_DAYS_TO_TARGET)
+
+    return {
+        'rb_onboard_power': rb_onboard_power_forecast, 
+        'renewal_rate': renewal_rate_forecast,
+        'filplus_rate': fil_plus_rate_forecast
+    }
+
+def forecast_onboard_median_rr_high_fpr_median_scenario(forecast_length: int):
+    start_date = NETWORK_START_DATE
+    today = datetime.datetime.now().date() - datetime.timedelta(days=10)
+
+    _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
+    historical_median_rbonboard_pw = np.nanmedian(historical_rbonboard_pw)
+    current_rbonboard_pw = historical_rbonboard_pw[-1]
+    rb_onboard_power_forecast = smooth_fast_exponential_change_and_plateau(current_rbonboard_pw,
+                                                                           historical_median_rbonboard_pw,
+                                                                           forecast_length,
+                                                                           FAST_NUM_DAYS_TO_TARGET)    
+
+    _, historical_filplus_rate = u.get_historical_filplus_rate(start_date, today)
+    historical_median_filplus_rate = np.nanmedian(historical_filplus_rate)
+    current_filplus_rate = historical_filplus_rate[-1]
+    fil_plus_rate_forecast = smooth_fast_exponential_change_and_plateau(current_filplus_rate,
+                                                                        historical_median_filplus_rate,
+                                                                        forecast_length,
+                                                                        FAST_NUM_DAYS_TO_TARGET)
+
+    # increase renewal-rate exponentially very quickly to max-value
+    MAX_RR = 0.99
+    _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
+    renewal_rate_forecast = smooth_fast_exponential_change_and_plateau(historical_renewal_rate[-1],
+                                                                       MAX_RR,
+                                                                       forecast_length,
+                                                                       FAST_NUM_DAYS_TO_TARGET)
+    return {
+        'rb_onboard_power': rb_onboard_power_forecast, 
+        'renewal_rate': renewal_rate_forecast,
+        'filplus_rate': fil_plus_rate_forecast
+    }
+
+def forecast_onboard_median_rr_low_fpr_median_scenario(forecast_length: int):
+    start_date = NETWORK_START_DATE
+    today = datetime.datetime.now().date() - datetime.timedelta(days=10)
+
+    _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
+    historical_median_rbonboard_pw = np.nanmedian(historical_rbonboard_pw)
+    current_rbonboard_pw = historical_rbonboard_pw[-1]
+    rb_onboard_power_forecast = smooth_fast_exponential_change_and_plateau(current_rbonboard_pw,
+                                                                           historical_median_rbonboard_pw,
+                                                                           forecast_length,
+                                                                           FAST_NUM_DAYS_TO_TARGET)    
+
+    _, historical_filplus_rate = u.get_historical_filplus_rate(start_date, today)
+    historical_median_filplus_rate = np.nanmedian(historical_filplus_rate)
+    current_filplus_rate = historical_filplus_rate[-1]
+    fil_plus_rate_forecast = smooth_fast_exponential_change_and_plateau(current_filplus_rate,
+                                                                        historical_median_filplus_rate,
+                                                                        forecast_length,
+                                                                        FAST_NUM_DAYS_TO_TARGET)
+
+    # increase renewal-rate exponentially very quickly to max-value
+    MIN_RR = 0.01
+    _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
+    renewal_rate_forecast = smooth_fast_exponential_change_and_plateau(historical_renewal_rate[-1],
+                                                                       MIN_RR,
+                                                                       forecast_length,
+                                                                       FAST_NUM_DAYS_TO_TARGET)
+
+    return {
+        'rb_onboard_power': rb_onboard_power_forecast, 
+        'renewal_rate': renewal_rate_forecast,
+        'filplus_rate': fil_plus_rate_forecast
+    }
+
+def forecast_onboard_low_rr_current_fpr_median_scenario(forecast_length: int):
+    start_date = NETWORK_START_DATE
+    today = datetime.datetime.now().date() - datetime.timedelta(days=10)
+
+    _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
+    current_rbonboard_pw = historical_rbonboard_pw[-1]
+    target_onboard = 1.0
+    rb_onboard_power_forecast = smooth_fast_exponential_change_and_plateau(current_rbonboard_pw,
+                                                                           target_onboard,
+                                                                           forecast_length,
+                                                                           FAST_NUM_DAYS_TO_TARGET)    
+
+    _, historical_filplus_rate = u.get_historical_filplus_rate(start_date, today)
+    historical_median_filplus_rate = np.nanmedian(historical_filplus_rate)
+    current_filplus_rate = historical_filplus_rate[-1]
+    fil_plus_rate_forecast = smooth_fast_exponential_change_and_plateau(current_filplus_rate,
+                                                                        historical_median_filplus_rate,
+                                                                        forecast_length,
+                                                                        FAST_NUM_DAYS_TO_TARGET)
+
+    # increase renewal-rate exponentially very quickly to max-value
+    _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
+    current_renewal_rate = historical_renewal_rate[-1]
+    renewal_rate_forecast = current_renewal_rate * np.ones(forecast_length)
+
+    return {
+        'rb_onboard_power': rb_onboard_power_forecast, 
+        'renewal_rate': renewal_rate_forecast,
+        'filplus_rate': fil_plus_rate_forecast
+    }
+
+def forecast_onboard_high_rr_current_fpr_median_scenario(forecast_length: int):
+    start_date = NETWORK_START_DATE
+    today = datetime.datetime.now().date() - datetime.timedelta(days=10)
+
+    _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
+    current_rbonboard_pw = historical_rbonboard_pw[-1]
+    target_onboard = np.max(historical_rbonboard_pw)
+    rb_onboard_power_forecast = smooth_fast_exponential_change_and_plateau(current_rbonboard_pw,
+                                                                           target_onboard,
+                                                                           forecast_length,
+                                                                           FAST_NUM_DAYS_TO_TARGET)    
+
+    _, historical_filplus_rate = u.get_historical_filplus_rate(start_date, today)
+    historical_median_filplus_rate = np.nanmedian(historical_filplus_rate)
+    current_filplus_rate = historical_filplus_rate[-1]
+    fil_plus_rate_forecast = smooth_fast_exponential_change_and_plateau(current_filplus_rate,
+                                                                        historical_median_filplus_rate,
+                                                                        forecast_length,
+                                                                        FAST_NUM_DAYS_TO_TARGET)
+
+    # increase renewal-rate exponentially very quickly to max-value
+    _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
+    current_renewal_rate = historical_renewal_rate[-1]
+    renewal_rate_forecast = current_renewal_rate * np.ones(forecast_length)
+
+    return {
+        'rb_onboard_power': rb_onboard_power_forecast, 
+        'renewal_rate': renewal_rate_forecast,
+        'filplus_rate': fil_plus_rate_forecast
+    }
+
+########
+def forecast_onboard_low_rr_median_fpr_median_scenario(forecast_length: int):
+    start_date = NETWORK_START_DATE
+    today = datetime.datetime.now().date() - datetime.timedelta(days=10)
+
+    _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
+    current_rbonboard_pw = historical_rbonboard_pw[-1]
+    target_onboard = 1.0
+    rb_onboard_power_forecast = smooth_fast_exponential_change_and_plateau(current_rbonboard_pw,
+                                                                           target_onboard,
+                                                                           forecast_length,
+                                                                           FAST_NUM_DAYS_TO_TARGET)    
+
+    _, historical_filplus_rate = u.get_historical_filplus_rate(start_date, today)
+    historical_median_filplus_rate = np.nanmedian(historical_filplus_rate)
+    current_filplus_rate = historical_filplus_rate[-1]
+    fil_plus_rate_forecast = smooth_fast_exponential_change_and_plateau(current_filplus_rate,
+                                                                        historical_median_filplus_rate,
+                                                                        forecast_length,
+                                                                        FAST_NUM_DAYS_TO_TARGET)
+
+    # increase renewal-rate exponentially very quickly to median
+    _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
+    current_renewal_rate = historical_renewal_rate[-1]
+    target_renewal_rate = np.nanmedian(historical_renewal_rate)
+    renewal_rate_forecast = smooth_fast_exponential_change_and_plateau(current_renewal_rate,
+                                                                       target_renewal_rate,
+                                                                       forecast_length,
+                                                                       FAST_NUM_DAYS_TO_TARGET)
+
+    return {
+        'rb_onboard_power': rb_onboard_power_forecast, 
+        'renewal_rate': renewal_rate_forecast,
+        'filplus_rate': fil_plus_rate_forecast
+    }
+
+def forecast_onboard_high_rr_median_fpr_median_scenario(forecast_length: int):
+    start_date = NETWORK_START_DATE
+    today = datetime.datetime.now().date() - datetime.timedelta(days=10)
+
+    _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
+    current_rbonboard_pw = historical_rbonboard_pw[-1]
+    target_onboard = np.max(historical_rbonboard_pw)
+    rb_onboard_power_forecast = smooth_fast_exponential_change_and_plateau(current_rbonboard_pw,
+                                                                           target_onboard,
+                                                                           forecast_length,
+                                                                           FAST_NUM_DAYS_TO_TARGET)    
+
+    _, historical_filplus_rate = u.get_historical_filplus_rate(start_date, today)
+    historical_median_filplus_rate = np.nanmedian(historical_filplus_rate)
+    current_filplus_rate = historical_filplus_rate[-1]
+    fil_plus_rate_forecast = smooth_fast_exponential_change_and_plateau(current_filplus_rate,
+                                                                        historical_median_filplus_rate,
+                                                                        forecast_length,
+                                                                        FAST_NUM_DAYS_TO_TARGET)
+
+    # increase renewal-rate exponentially very quickly to median
+    _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
+    current_renewal_rate = historical_renewal_rate[-1]
+    target_renewal_rate = np.nanmedian(historical_renewal_rate)
+    renewal_rate_forecast = smooth_fast_exponential_change_and_plateau(current_renewal_rate,
+                                                                       target_renewal_rate,
+                                                                       forecast_length,
+                                                                       FAST_NUM_DAYS_TO_TARGET)
 
     return {
         'rb_onboard_power': rb_onboard_power_forecast, 
