@@ -9,6 +9,7 @@ import scenario_generator.utils as u
 
 NETWORK_START_DATE = datetime.date(2020, 10, 15)
 FAST_NUM_DAYS_TO_TARGET = 15
+SLOW_NUM_DAYS_TO_TARGET = 90
 
 def fit_exponential(x1, y1, x2, y2):
     # Solves y = a*b^x for given points (x1, y1) and (x2, y2)
@@ -93,20 +94,27 @@ def forecast_optimistic_scenario(forecast_length: int):
         'filplus_rate': fil_plus_rate_forecast
     }
 
-def forecast_optimistic_scenario_smooth(forecast_length: int):
-    OPTIMISTIC_VAL = 0.999
+def forecast_optimistic_growth_scenario(forecast_length: int):
+    OPTIMISTIC_VAL = 0.8
 
     start_date = NETWORK_START_DATE
     today = datetime.datetime.now().date() - datetime.timedelta(days=10)
+
     _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
-    historical_max_rbonboard = np.max(historical_rbonboard_pw)
-    t = np.arange(forecast_length)
-    a, b = fit_exponential(t[0], historical_rbonboard_pw[-1], forecast_length, historical_max_rbonboard)
-    rb_onboard_power_forecast = a*np.power(b, t)
-    
+    current_rbonboard_pw = historical_rbonboard_pw[-1]
+    target_onboard = np.max(historical_rbonboard_pw)*OPTIMISTIC_VAL
+    rb_onboard_power_forecast = smooth_fast_exponential_change_and_plateau(current_rbonboard_pw,
+                                                                           target_onboard,
+                                                                           forecast_length,
+                                                                           SLOW_NUM_DAYS_TO_TARGET)    
+                                                                           
     _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
-    a, b = fit_exponential(t[0], historical_renewal_rate[-1], forecast_length, OPTIMISTIC_VAL)
-    renewal_rate_forecast = a*np.power(b, t)
+    current_renewal_rate = historical_renewal_rate[-1]
+    target_renewal_rate = OPTIMISTIC_VAL
+    renewal_rate_forecast = smooth_fast_exponential_change_and_plateau(current_renewal_rate,
+                                                                       target_renewal_rate,
+                                                                       forecast_length,
+                                                                       SLOW_NUM_DAYS_TO_TARGET)
 
     fil_plus_rate_forecast = forecast_filplus_expcurve_from_date(today, OPTIMISTIC_VAL, forecast_length)
 
@@ -129,20 +137,27 @@ def forecast_pessimistic_scenario(forecast_length: int):
         'filplus_rate': fil_plus_rate_forecast
     }
 
-def forecast_pessimistic_scenario_smooth(forecast_length: int):
-    PESSIMISTIC_VAL = 0.01
+def forecast_pessimistic_decay_scenario(forecast_length: int):
+    PESSIMISTIC_VAL = 0.1
 
     start_date = NETWORK_START_DATE
     today = datetime.datetime.now().date() - datetime.timedelta(days=10)
+    
     _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
-    historical_min_rbonboard = np.min(historical_rbonboard_pw)
-    t = np.arange(forecast_length)
-    a, b = fit_exponential(t[0], historical_rbonboard_pw[-1], forecast_length, historical_min_rbonboard)
-    rb_onboard_power_forecast = a*np.power(b, t)
+    current_rbonboard_pw = historical_rbonboard_pw[-1]
+    target_onboard = np.max(historical_rbonboard_pw)*PESSIMISTIC_VAL
+    rb_onboard_power_forecast = smooth_fast_exponential_change_and_plateau(current_rbonboard_pw,
+                                                                           target_onboard,
+                                                                           forecast_length,
+                                                                           SLOW_NUM_DAYS_TO_TARGET)    
 
     _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
-    a, b = fit_exponential(t[0], historical_renewal_rate[-1], forecast_length, PESSIMISTIC_VAL)
-    renewal_rate_forecast = a*np.power(b, t)
+    current_renewal_rate = historical_renewal_rate[-1]
+    target_renewal_rate = PESSIMISTIC_VAL
+    renewal_rate_forecast = smooth_fast_exponential_change_and_plateau(current_renewal_rate,
+                                                                       target_renewal_rate,
+                                                                       forecast_length,
+                                                                       SLOW_NUM_DAYS_TO_TARGET)
 
     fil_plus_rate_forecast = forecast_filplus_expcurve_from_date(today, PESSIMISTIC_VAL, forecast_length)
 
