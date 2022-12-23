@@ -77,16 +77,15 @@ def forecast_filplus_expcurve_from_date(start_date: datetime.date,
     forecasted_filplus_rate = a * np.power(b, t)
     return forecasted_filplus_rate
 
-def forecast_optimistic_scenario(forecast_length: int):
-    OPTIMISTIC_VAL = 0.99
-
+def forecast_optimistic_scenario(forecast_length: int,
+                                 pct_max_val: float = 0.9):
     start_date = NETWORK_START_DATE
     today = datetime.datetime.now().date() - datetime.timedelta(days=1)
     _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
     historical_max_rbonboard = np.max(historical_rbonboard_pw)
     rb_onboard_power_forecast = np.ones(forecast_length) * historical_max_rbonboard
-    renewal_rate_forecast = np.ones(forecast_length) * OPTIMISTIC_VAL
-    fil_plus_rate_forecast = np.ones(forecast_length) * OPTIMISTIC_VAL
+    renewal_rate_forecast = np.ones(forecast_length) * pct_max_val
+    fil_plus_rate_forecast = np.ones(forecast_length) * pct_max_val
 
     return {
         'rb_onboard_power': rb_onboard_power_forecast, 
@@ -94,72 +93,83 @@ def forecast_optimistic_scenario(forecast_length: int):
         'filplus_rate': fil_plus_rate_forecast
     }
 
-def forecast_optimistic_growth_scenario(forecast_length: int):
-    OPTIMISTIC_VAL = 0.8
+def forecast_smooth_scenario(forecast_length: int,
+                             pct_max_val: float = 0.9,
+                             days_to_target: int = 90,
+                             rb_onboard_setting: str = 'smooth_pcttarget',
+                             renewal_rate_setting: str = 'smooth_pcttarget',
+                             filplus_rate_setting: str = 'smooth_pcttarget'):
+
 
     start_date = NETWORK_START_DATE
     today = datetime.datetime.now().date() - datetime.timedelta(days=10)
 
     _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
     current_rbonboard_pw = historical_rbonboard_pw[-1]
-    target_onboard = np.max(historical_rbonboard_pw)*OPTIMISTIC_VAL
-    rb_onboard_power_forecast = smooth_fast_exponential_change_and_plateau(current_rbonboard_pw,
-                                                                           target_onboard,
-                                                                           forecast_length,
-                                                                           SLOW_NUM_DAYS_TO_TARGET)    
-                                                                           
+    if rb_onboard_setting == 'smooth_pcttarget':
+        target_onboard = np.max(historical_rbonboard_pw)*pct_max_val
+        rb_onboard_power_forecast = smooth_fast_exponential_change_and_plateau(current_rbonboard_pw,
+                                                                               target_onboard,
+                                                                               forecast_length,
+                                                                               days_to_target)    
+    elif rb_onboard_setting == 'historical_median':
+        target_onboard = np.nanmedian(historical_rbonboard_pw)
+        rb_onboard_power_forecast = smooth_fast_exponential_change_and_plateau(current_rbonboard_pw,
+                                                                               target_onboard,
+                                                                               forecast_length,
+                                                                               days_to_target)    
+
+    elif rb_onboard_setting == 'current':
+        rb_onboard_power_forecast = np.ones(forecast_length) * current_rbonboard_pw
+
     _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
     current_renewal_rate = historical_renewal_rate[-1]
-    target_renewal_rate = OPTIMISTIC_VAL
-    renewal_rate_forecast = smooth_fast_exponential_change_and_plateau(current_renewal_rate,
-                                                                       target_renewal_rate,
-                                                                       forecast_length,
-                                                                       SLOW_NUM_DAYS_TO_TARGET)
+    if renewal_rate_setting == 'smooth_pcttarget':                                       
+        target_renewal_rate = pct_max_val
+        renewal_rate_forecast = smooth_fast_exponential_change_and_plateau(current_renewal_rate,
+                                                                           target_renewal_rate,
+                                                                           forecast_length,
+                                                                           days_to_target)
+    elif renewal_rate_setting == 'historical_median':
+        target_renewal_rate = np.nanmedian(historical_renewal_rate)
+        renewal_rate_forecast = smooth_fast_exponential_change_and_plateau(current_renewal_rate,
+                                                                           target_renewal_rate,
+                                                                           forecast_length,
+                                                                           days_to_target)    
+    elif renewal_rate_setting == 'current':
+        renewal_rate_forecast = np.ones(forecast_length) * current_renewal_rate
 
-    fil_plus_rate_forecast = forecast_filplus_expcurve_from_date(today, OPTIMISTIC_VAL, forecast_length)
-
-    return {
-        'rb_onboard_power': rb_onboard_power_forecast, 
-        'renewal_rate': renewal_rate_forecast,
-        'filplus_rate': fil_plus_rate_forecast
-    }
-
-def forecast_pessimistic_scenario(forecast_length: int):
-    PESSIMISTIC_VAL = 0.01
-
-    rb_onboard_power_forecast = np.ones(forecast_length) * PESSIMISTIC_VAL
-    renewal_rate_forecast = np.ones(forecast_length) * PESSIMISTIC_VAL
-    fil_plus_rate_forecast = np.ones(forecast_length) * PESSIMISTIC_VAL
-
-    return {
-        'rb_onboard_power': rb_onboard_power_forecast, 
-        'renewal_rate': renewal_rate_forecast,
-        'filplus_rate': fil_plus_rate_forecast
-    }
-
-def forecast_pessimistic_decay_scenario(forecast_length: int):
-    PESSIMISTIC_VAL = 0.1
-
-    start_date = NETWORK_START_DATE
-    today = datetime.datetime.now().date() - datetime.timedelta(days=10)
     
-    _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
-    current_rbonboard_pw = historical_rbonboard_pw[-1]
-    target_onboard = np.max(historical_rbonboard_pw)*PESSIMISTIC_VAL
-    rb_onboard_power_forecast = smooth_fast_exponential_change_and_plateau(current_rbonboard_pw,
-                                                                           target_onboard,
-                                                                           forecast_length,
-                                                                           SLOW_NUM_DAYS_TO_TARGET)    
+    # fil_plus_rate_forecast = forecast_filplus_expcurve_from_date(today, pct_max_val, forecast_length)
+    _, historical_filplus_rate = u.get_historical_filplus_rate(start_date, today)
+    current_filplus_rate = historical_filplus_rate[-1]
+    if filplus_rate_setting == 'smooth_pcttarget':
+        target_filplus_rate = pct_max_val
+        fil_plus_rate_forecast = smooth_fast_exponential_change_and_plateau(current_filplus_rate,
+                                                                            target_filplus_rate,
+                                                                            forecast_length,
+                                                                            days_to_target)
+    elif filplus_rate_setting == 'historical_median':
+        target_filplus_rate = np.nanmedian(historical_filplus_rate)
+        fil_plus_rate_forecast = smooth_fast_exponential_change_and_plateau(current_filplus_rate,
+                                                                            target_filplus_rate,
+                                                                            forecast_length,
+                                                                            days_to_target)    
 
-    _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
-    current_renewal_rate = historical_renewal_rate[-1]
-    target_renewal_rate = PESSIMISTIC_VAL
-    renewal_rate_forecast = smooth_fast_exponential_change_and_plateau(current_renewal_rate,
-                                                                       target_renewal_rate,
-                                                                       forecast_length,
-                                                                       SLOW_NUM_DAYS_TO_TARGET)
+    elif filplus_rate_setting == 'current':
+        fil_plus_rate_forecast = np.ones(forecast_length) * current_filplus_rate
 
-    fil_plus_rate_forecast = forecast_filplus_expcurve_from_date(today, PESSIMISTIC_VAL, forecast_length)
+    return {
+        'rb_onboard_power': rb_onboard_power_forecast, 
+        'renewal_rate': renewal_rate_forecast,
+        'filplus_rate': fil_plus_rate_forecast
+    }
+
+def forecast_pessimistic_scenario(forecast_length: int,
+                                  pct_min_val: float = 0.1):
+    rb_onboard_power_forecast = np.ones(forecast_length) * pct_min_val
+    renewal_rate_forecast = np.ones(forecast_length) * pct_min_val
+    fil_plus_rate_forecast = np.ones(forecast_length) * pct_min_val
 
     return {
         'rb_onboard_power': rb_onboard_power_forecast, 

@@ -1,14 +1,15 @@
 import datetime
+import requests
+
 import pandas as pd
 import numpy as np
+
 import jax.numpy as jnp
 
-# TODO: remove when mechafil is converted to a python module
-import sys
-sys.path.append('../filecoin-mecha-twin')
 from mechafil.data import query_starboard_daily_power_onboarded, \
                           query_starboard_sector_expirations
 
+PIB = 2**50
 
 def sanity_check_date(date_in: datetime.date, err_msg = None):
     today = datetime.datetime.now().date()
@@ -62,6 +63,24 @@ def get_historical_extensions(start_date: datetime.date,
 
     return t_vec, extend_vec
 
+def get_historical_extensions_online(start_date: datetime.date,
+                              end_date: datetime.date):
+    url = f"https://observable-api.starboard.ventures/getdata/sectors_schedule_expiration_full?start={str(start_date)}&end={str(end_date)}"
+    r = requests.get(url)
+    # Put data in dataframe
+    extensions_df_starboard = pd.DataFrame(r.json()["data"])
+    extensions_df_starboard['date'] = pd.to_datetime(extensions_df_starboard['stat_date'])
+    for c in extensions_df_starboard.columns:
+        if 'date' not in c:
+            extensions_df_starboard[c] = extensions_df_starboard[c].astype(float)
+    
+
+    t_vec = extensions_df_starboard['date']
+    extend_vec = extensions_df_starboard['extended_bytes'].values/PIB
+
+    return t_vec, extend_vec
+
+
 def get_historical_expirations(start_date: datetime.date,
                                end_date: datetime.date):
     df = pd.read_csv('offline_info/Scheduled_Expiration_by_Date_Breakdown_in_PiB.csv')
@@ -74,6 +93,21 @@ def get_historical_expirations(start_date: datetime.date,
     t_vec = pd.to_datetime(df.stateTime)
     expire_vec = df['Expired'].values
 
+    return t_vec, expire_vec
+
+def get_historical_expirations_online(start_date: datetime.date,
+                               end_date: datetime.date):
+    url = f"https://observable-api.starboard.ventures/getdata/sectors_schedule_expiration_full?start={str(start_date)}&end={str(end_date)}"
+    r = requests.get(url)
+    # Put data in dataframe
+    expirations_df_starboard = pd.DataFrame(r.json()["data"])
+    expirations_df_starboard['date'] = pd.to_datetime(expirations_df_starboard['stat_date'])
+    for c in expirations_df_starboard.columns:
+        if 'date' not in c:
+            expirations_df_starboard[c] = expirations_df_starboard[c].astype(float)
+
+    t_vec = expirations_df_starboard['date']
+    expire_vec = expirations_df_starboard['expired_bytes'].values/PIB
     return t_vec, expire_vec
 
 def get_historical_deals_onboard(start_date: datetime.date,
@@ -90,6 +124,26 @@ def get_historical_deals_onboard(start_date: datetime.date,
     deals_onboard_vec = df.deals_onboard.values
 
     return t_vec, deals_onboard_vec
+
+def get_historical_deals_onboard_online(start_date: datetime.date,
+                                 end_date: datetime.date):
+    url = f"https://observable-api.starboard.ventures/getdata/deal-states-aggregate-daily?start={str(start_date)}&end={str(end_date)}"
+    r = requests.get(url)
+    # Put data in dataframe
+    deals_onboard_df_starboard = pd.DataFrame(r.json()["data"])
+    deals_onboard_df_starboard['date'] = pd.to_datetime(deals_onboard_df_starboard['stat_date'])
+
+    for c in deals_onboard_df_starboard.columns:
+        if 'date' not in c:
+            deals_onboard_df_starboard[c] = deals_onboard_df_starboard[c].astype(float)
+
+
+    t_vec = deals_onboard_df_starboard['date']
+    deals_onboard_vec = deals_onboard_df_starboard['activated_deals_regular_bytes'].values + \
+                        deals_onboard_df_starboard['activated_deals_verified_bytes'].values
+
+    return t_vec, deals_onboard_vec
+
 
 def get_historical_filplus_rate(start_date: datetime.date,
                                 end_date: datetime.date):

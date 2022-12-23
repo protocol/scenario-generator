@@ -114,11 +114,14 @@ def forecast_rb_onboard_power(train_start_date: datetime.date,
     y_train = jnp.array(y)
     u.err_check_train_data(y_train)
     
-    rb_onboard_power_pred = mcmc_predict(y_train, forecast_length,
+    # y_scale = y_train.max()
+    y_scale = 1
+    rb_onboard_power_pred = mcmc_predict(y_train/y_scale, forecast_length,
                                          num_warmup_mcmc=num_warmup_mcmc, 
                                          num_samples_mcmc=num_samples_mcmc,
                                          seasonality_mcmc=seasonality_mcmc, 
                                          num_chains_mcmc=num_chains_mcmc)
+    rb_onboard_power_pred *= y_scale
     
     forecast_start_date = train_end_date + datetime.timedelta(days=1)
     forecast_date_vec = u.make_forecast_date_vec(forecast_start_date, forecast_length)
@@ -253,20 +256,26 @@ def forecast_filplus_rate(train_start_date: datetime.date,
     x_deal_onboard_train = x_deal_onboard_train[ii_start:ii_end]
     y_deal_onboard_train = y_deal_onboard_train[ii_start:ii_end]
 
-    deal_onboard_pred = mcmc_predict(y_deal_onboard_train, forecast_length,
+    # y_deal_onboard_scale = y_deal_onboard_train.max()
+    y_deal_onboard_scale = 1
+    deal_onboard_pred = mcmc_predict(y_deal_onboard_train/y_deal_onboard_scale, forecast_length,
                                      num_warmup_mcmc=num_warmup_mcmc, 
                                      num_samples_mcmc=num_samples_mcmc,
                                      seasonality_mcmc=seasonality_mcmc, 
                                      num_chains_mcmc=num_chains_mcmc)
     forecast_start_date = train_end_date + datetime.timedelta(days=1)
     forecast_date_vec = u.make_forecast_date_vec(forecast_start_date, forecast_length)
+    deal_onboard_pred *= y_deal_onboard_scale
 
     y_cc_onboard_train = jnp.array(y_rb_onboard_train - y_deal_onboard_train)
-    cc_onboard_pred = mcmc_predict(y_cc_onboard_train, forecast_length,
+    # y_cc_onboard_scale = y_cc_onboard_train.max()
+    y_cc_onboard_scale = 1
+    cc_onboard_pred = mcmc_predict(y_cc_onboard_train/y_cc_onboard_scale, forecast_length,
                                    num_warmup_mcmc=num_warmup_mcmc, 
                                    num_samples_mcmc=num_samples_mcmc,
                                    seasonality_mcmc=seasonality_mcmc, 
                                    num_chains_mcmc=num_chains_mcmc)
+    cc_onboard_pred *= y_cc_onboard_scale
 
     xx = x_rb_onboard_train
     yy = y_deal_onboard_train / (y_cc_onboard_train + y_deal_onboard_train)
