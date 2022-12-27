@@ -98,13 +98,12 @@ def forecast_smooth_scenario(forecast_length: int,
                              days_to_target: int = 90,
                              rb_onboard_setting: str = 'smooth_pcttarget',
                              renewal_rate_setting: str = 'smooth_pcttarget',
-                             filplus_rate_setting: str = 'smooth_pcttarget'):
-
-
-    start_date = NETWORK_START_DATE
-    today = datetime.datetime.now().date() - datetime.timedelta(days=10)
-
-    _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(start_date, today)
+                             filplus_rate_setting: str = 'smooth_pcttarget',
+                             start_date: datetime.date = None):
+                             
+    today = datetime.datetime.now().date() - datetime.timedelta(days=10) if start_date is None else start_date
+    
+    _, historical_rbonboard_pw = u.get_historical_daily_onboarded_power(NETWORK_START_DATE, today)
     current_rbonboard_pw = historical_rbonboard_pw[-1]
     if rb_onboard_setting == 'smooth_pcttarget':
         target_onboard = np.max(historical_rbonboard_pw)*pct_max_val
@@ -122,7 +121,7 @@ def forecast_smooth_scenario(forecast_length: int,
     elif rb_onboard_setting == 'current':
         rb_onboard_power_forecast = np.ones(forecast_length) * current_rbonboard_pw
 
-    _, historical_renewal_rate = u.get_historical_renewal_rate(start_date, today)
+    _, historical_renewal_rate = u.get_historical_renewal_rate(NETWORK_START_DATE, today)
     current_renewal_rate = historical_renewal_rate[-1]
     if renewal_rate_setting == 'smooth_pcttarget':                                       
         target_renewal_rate = pct_max_val
@@ -141,7 +140,7 @@ def forecast_smooth_scenario(forecast_length: int,
 
     
     # fil_plus_rate_forecast = forecast_filplus_expcurve_from_date(today, pct_max_val, forecast_length)
-    _, historical_filplus_rate = u.get_historical_filplus_rate(start_date, today)
+    _, historical_filplus_rate = u.get_historical_filplus_rate(NETWORK_START_DATE, today)
     current_filplus_rate = historical_filplus_rate[-1]
     if filplus_rate_setting == 'smooth_pcttarget':
         target_filplus_rate = pct_max_val
