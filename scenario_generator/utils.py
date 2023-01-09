@@ -8,6 +8,9 @@ import jax.numpy as jnp
 
 from mechafil.data import query_starboard_daily_power_onboarded, \
                           query_starboard_sector_expirations
+from mechafil.data_spacescope import query_spacescope_daily_power_onboarded, \
+                                     query_spacescope_sector_expirations
+from mechafil.data_spacescope import spacescope_query
 
 PIB = 2**50
 
@@ -34,13 +37,14 @@ def get_historical_daily_onboarded_power(start_date: datetime.date,
     sanity_check_date(start_date, err_msg="Specified start_date is after today!")
     sanity_check_date(end_date, err_msg="Specified end_date is after today!")
 
-    onboards_df = query_starboard_daily_power_onboarded(start_date, end_date)
+    onboards_df = query_spacescope_daily_power_onboarded(start_date, end_date)
     t_vec = pd.to_datetime(onboards_df.date)
     rb_onboard_vec = onboards_df['day_onboarded_rb_power_pib'].values
     return t_vec, rb_onboard_vec
 
 def get_historical_renewal_rate(start_date: datetime.date,
                                 end_date: datetime.date):
+    # TODO: need to update this once we resolve how spacescope is getting data
     sector_expirations_df = query_starboard_sector_expirations(start_date, end_date)
     t_vec = pd.to_datetime(sector_expirations_df.date)
 
@@ -52,7 +56,7 @@ def get_historical_renewal_rate(start_date: datetime.date,
 def get_historical_extensions(start_date: datetime.date,
                               end_date: datetime.date):
     df = pd.read_csv('offline_info/Scheduled_Expiration_by_Date_Breakdown_in_PiB.csv')
-    df = df[df.stateTime <= str(end_date)]
+    df = df[(df.stateTime <= str(end_date)) & (df.stateTime >= str(start_date))]
     # NOTE: this can be removed when we upgrade this to get data directly from starboard
     num_days_train = end_date - start_date
     num_days_train = int(num_days_train.days)
@@ -64,19 +68,11 @@ def get_historical_extensions(start_date: datetime.date,
     return t_vec, extend_vec
 
 def get_historical_extensions_online(start_date: datetime.date,
-                              end_date: datetime.date):
-    url = f"https://observable-api.starboard.ventures/getdata/sectors_schedule_expiration_full?start={str(start_date)}&end={str(end_date)}"
-    r = requests.get(url)
+                                     end_date: datetime.date):
     # Put data in dataframe
-    extensions_df_starboard = pd.DataFrame(r.json()["data"])
-    extensions_df_starboard['date'] = pd.to_datetime(extensions_df_starboard['stat_date'])
-    for c in extensions_df_starboard.columns:
-        if 'date' not in c:
-            extensions_df_starboard[c] = extensions_df_starboard[c].astype(float)
-    
-
-    t_vec = extensions_df_starboard['date']
-    extend_vec = extensions_df_starboard['extended_bytes'].values/PIB
+    extend_df = query_spacescope_sector_expirations(start_date, end_date)
+    t_vec = pd.to_datetime(extend_df.date)
+    extend_vec = extend_df['extended_rb'].values # already in PiB
 
     return t_vec, extend_vec
 
@@ -84,7 +80,7 @@ def get_historical_extensions_online(start_date: datetime.date,
 def get_historical_expirations(start_date: datetime.date,
                                end_date: datetime.date):
     df = pd.read_csv('offline_info/Scheduled_Expiration_by_Date_Breakdown_in_PiB.csv')
-    df = df[df.stateTime <= str(end_date)]
+    df = df[(df.stateTime <= str(end_date)) & (df.stateTime >= str(start_date))]
     # NOTE: this can be removed when we upgrade this to get data directly from starboard
     num_days_train = end_date - start_date
     num_days_train = int(num_days_train.days)
@@ -97,24 +93,17 @@ def get_historical_expirations(start_date: datetime.date,
 
 def get_historical_expirations_online(start_date: datetime.date,
                                end_date: datetime.date):
-    url = f"https://observable-api.starboard.ventures/getdata/sectors_schedule_expiration_full?start={str(start_date)}&end={str(end_date)}"
-    r = requests.get(url)
-    # Put data in dataframe
-    expirations_df_starboard = pd.DataFrame(r.json()["data"])
-    expirations_df_starboard['date'] = pd.to_datetime(expirations_df_starboard['stat_date'])
-    for c in expirations_df_starboard.columns:
-        if 'date' not in c:
-            expirations_df_starboard[c] = expirations_df_starboard[c].astype(float)
+    expire_df = query_spacescope_sector_expirations(start_date, end_date)
 
-    t_vec = expirations_df_starboard['date']
-    expire_vec = expirations_df_starboard['expired_bytes'].values/PIB
+    t_vec = expire_df['date']
+    expire_vec = expire_df['expired_rb'].values  # already in PiB
     return t_vec, expire_vec
 
 def get_historical_deals_onboard(start_date: datetime.date,
                                  end_date: datetime.date):
     df = pd.read_csv('offline_info/Daily_Active_Deal_TiB_Change_Breakdown.csv')
     df['deals_onboard'] = df['New Active Deal'] / 1024
-    df = df[df.stateTime <= str(end_date)]
+    df = df[(df.stateTime <= str(end_date)) & (df.stateTime >= str(start_date))]
     # NOTE: this can be removed when we upgrade this to get data directly from starboard
     num_days_train = end_date - start_date
     num_days_train = int(num_days_train.days)
@@ -127,20 +116,15 @@ def get_historical_deals_onboard(start_date: datetime.date,
 
 def get_historical_deals_onboard_online(start_date: datetime.date,
                                  end_date: datetime.date):
-    url = f"https://observable-api.starboard.ventures/getdata/deal-states-aggregate-daily?start={str(start_date)}&end={str(end_date)}"
-    r = requests.get(url)
-    # Put data in dataframe
-    deals_onboard_df_starboard = pd.DataFrame(r.json()["data"])
-    deals_onboard_df_starboard['date'] = pd.to_datetime(deals_onboard_df_starboard['stat_date'])
+    url_template="https://api.spacescope.io/v2/deals/deal_size?end_date=%s&start_date=%s"
+    df = spacescope_query(start_date, end_date, url_template)
+    df['date'] = pd.to_datetime(df['stat_date'])
 
-    for c in deals_onboard_df_starboard.columns:
-        if 'date' not in c:
-            deals_onboard_df_starboard[c] = deals_onboard_df_starboard[c].astype(float)
-
-
-    t_vec = deals_onboard_df_starboard['date']
-    deals_onboard_vec = deals_onboard_df_starboard['activated_deals_regular_bytes'].values + \
-                        deals_onboard_df_starboard['activated_deals_verified_bytes'].values
+    # templated from: https://observablehq.com/@starboard/chart-daily-active-deal-tib-change-breakdown
+    t_vec = df['date']
+    deals_onboard_vec = df['daily_activated_regular_deal_size'].astype(float).values + \
+                        df['daily_activated_verified_deal_size'].astype(float).values
+    deals_onboard_vec /= PIB
 
     return t_vec, deals_onboard_vec
 
