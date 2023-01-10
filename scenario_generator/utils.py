@@ -6,8 +6,6 @@ import numpy as np
 
 import jax.numpy as jnp
 
-from mechafil.data import query_starboard_daily_power_onboarded, \
-                          query_starboard_sector_expirations
 from mechafil.data_spacescope import query_spacescope_daily_power_onboarded, \
                                      query_spacescope_sector_expirations
 from mechafil.data_spacescope import spacescope_query
@@ -44,11 +42,10 @@ def get_historical_daily_onboarded_power(start_date: datetime.date,
 
 def get_historical_renewal_rate(start_date: datetime.date,
                                 end_date: datetime.date):
-    # TODO: need to update this once we resolve how spacescope is getting data
-    sector_expirations_df = query_starboard_sector_expirations(start_date, end_date)
+    sector_expirations_df = query_spacescope_sector_expirations(start_date, end_date)
     t_vec = pd.to_datetime(sector_expirations_df.date)
 
-    historical_renewal_rate = sector_expirations_df['extended_rb'] / (sector_expirations_df['extended_rb'] + sector_expirations_df['expired_rb'] + sector_expirations_df['open_rb'])
+    historical_renewal_rate = sector_expirations_df['extended_rb'] / sector_expirations_df["total_rb"]
     historical_renewal_rate = historical_renewal_rate.values
     
     return t_vec, historical_renewal_rate
