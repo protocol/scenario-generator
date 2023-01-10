@@ -50,7 +50,7 @@ def get_historical_renewal_rate(start_date: datetime.date,
     
     return t_vec, historical_renewal_rate
 
-def get_historical_extensions(start_date: datetime.date,
+def get_historical_extensions_offline(start_date: datetime.date,
                               end_date: datetime.date):
     df = pd.read_csv('offline_info/Scheduled_Expiration_by_Date_Breakdown_in_PiB.csv')
     df = df[(df.stateTime <= str(end_date)) & (df.stateTime >= str(start_date))]
@@ -64,7 +64,7 @@ def get_historical_extensions(start_date: datetime.date,
 
     return t_vec, extend_vec
 
-def get_historical_extensions_online(start_date: datetime.date,
+def get_historical_extensions(start_date: datetime.date,
                                      end_date: datetime.date):
     # Put data in dataframe
     extend_df = query_spacescope_sector_expirations(start_date, end_date)
@@ -74,7 +74,7 @@ def get_historical_extensions_online(start_date: datetime.date,
     return t_vec, extend_vec
 
 
-def get_historical_expirations(start_date: datetime.date,
+def get_historical_expirations_offline(start_date: datetime.date,
                                end_date: datetime.date):
     df = pd.read_csv('offline_info/Scheduled_Expiration_by_Date_Breakdown_in_PiB.csv')
     df = df[(df.stateTime <= str(end_date)) & (df.stateTime >= str(start_date))]
@@ -88,7 +88,7 @@ def get_historical_expirations(start_date: datetime.date,
 
     return t_vec, expire_vec
 
-def get_historical_expirations_online(start_date: datetime.date,
+def get_historical_expirations(start_date: datetime.date,
                                end_date: datetime.date):
     expire_df = query_spacescope_sector_expirations(start_date, end_date)
 
@@ -96,7 +96,7 @@ def get_historical_expirations_online(start_date: datetime.date,
     expire_vec = expire_df['expired_rb'].values  # already in PiB
     return t_vec, expire_vec
 
-def get_historical_deals_onboard(start_date: datetime.date,
+def get_historical_deals_onboard_offline(start_date: datetime.date,
                                  end_date: datetime.date):
     df = pd.read_csv('offline_info/Daily_Active_Deal_TiB_Change_Breakdown.csv')
     df['deals_onboard'] = df['New Active Deal'] / 1024
@@ -111,7 +111,7 @@ def get_historical_deals_onboard(start_date: datetime.date,
 
     return t_vec, deals_onboard_vec
 
-def get_historical_deals_onboard_online(start_date: datetime.date,
+def get_historical_deals_onboard(start_date: datetime.date,
                                  end_date: datetime.date):
     url_template="https://api.spacescope.io/v2/deals/deal_size?end_date=%s&start_date=%s"
     df = spacescope_query(start_date, end_date, url_template)
