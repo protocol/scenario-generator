@@ -14,7 +14,7 @@ install_requires = ['numpy',
                     'pandas',
                     'numpyro',
                     'jax',
-                    # 'filecoin-mecha-twin'  # enable once a pip package
+                    'mechaFIL',
                     ]
 
 setuptools.setup(
