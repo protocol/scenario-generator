@@ -147,11 +147,15 @@ def forecast_extensions(train_start_date: datetime.date,
                         num_warmup_mcmc: int = 500,
                         num_samples_mcmc: int = 100,
                         seasonality_mcmc: int = 1000,
-                        num_chains_mcmc: int = 2):
+                        num_chains_mcmc: int = 2,
+                        historical_extensions_fp: str = None):
     u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
     u.sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
-    x, y = u.get_historical_extensions(train_start_date, train_end_date)
+    if historical_extensions_fp is None:
+        x, y = u.get_historical_extensions(train_start_date, train_end_date)
+    else:
+        x, y = u.get_historical_expirations_offline(train_start_date, train_end_date, historical_extensions_fp)
     y_train = jnp.array(y)
     u.err_check_train_data(y_train)
 
@@ -171,11 +175,15 @@ def forecast_expirations(train_start_date: datetime.date,
                          num_warmup_mcmc: int = 500,
                          num_samples_mcmc: int = 100,
                          seasonality_mcmc: int = 1000,
-                         num_chains_mcmc: int = 2):
+                         num_chains_mcmc: int = 2,
+                         historical_expirations_fp: str = None):
     u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
     u.sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
-    x, y = u.get_historical_expirations(train_start_date, train_end_date)
+    if historical_expirations_fp is None:
+        x, y = u.get_historical_expirations(train_start_date, train_end_date)
+    else:
+        x, y = u.get_historical_expirations_offline(train_start_date, train_end_date, historical_expirations_fp)
     y_train = jnp.array(y)
     u.err_check_train_data(y_train)
 
@@ -195,7 +203,9 @@ def forecast_renewal_rate(train_start_date: datetime.date,
                           num_warmup_mcmc: int = 500,
                           num_samples_mcmc: int = 100,
                           seasonality_mcmc: int = 1000,
-                          num_chains_mcmc: int = 2):
+                          num_chains_mcmc: int = 2,
+                          historical_extensions_fp: str = None,
+                          historical_expirations_fp: str = None):
     u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
     u.sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
@@ -205,14 +215,16 @@ def forecast_renewal_rate(train_start_date: datetime.date,
                                                                                  num_warmup_mcmc = num_warmup_mcmc,
                                                                                  num_samples_mcmc = num_samples_mcmc,
                                                                                  seasonality_mcmc = seasonality_mcmc,
-                                                                                 num_chains_mcmc = num_chains_mcmc)
+                                                                                 num_chains_mcmc = num_chains_mcmc,
+                                                                                 historical_extensions_fp = historical_extensions_fp)
     _, expire_pred, x_expire, y_expire = forecast_expirations(train_start_date, 
                                                               train_end_date,
                                                               forecast_length,
                                                               num_warmup_mcmc = num_warmup_mcmc,
                                                               num_samples_mcmc = num_samples_mcmc,
                                                               seasonality_mcmc = seasonality_mcmc,
-                                                              num_chains_mcmc = num_chains_mcmc)
+                                                              num_chains_mcmc = num_chains_mcmc,
+                                                              historical_expirations_fp = historical_expirations_fp)
     if not x_extend.equals(x_expire):
         raise ValueError("Unable to get the same amount of data for extensions and expirations!")
     renewal_rate_historical = y_extend / (y_extend + y_expire)
@@ -227,7 +239,8 @@ def forecast_filplus_rate(train_start_date: datetime.date,
                           num_warmup_mcmc: int = 500,
                           num_samples_mcmc: int = 100,
                           seasonality_mcmc: int = 1000,
-                          num_chains_mcmc: int = 2):
+                          num_chains_mcmc: int = 2,
+                          historical_deals_onboard_fp: str = None):
     """
     1. forecast deal_onboard --> deal_onboard_dist
     2. find cc_onboard = rawbyte_onboard - deal_onboard
@@ -237,7 +250,10 @@ def forecast_filplus_rate(train_start_date: datetime.date,
     u.sanity_check_date(train_start_date, err_msg="Specified train_start_date is after today!")
     u.sanity_check_date(train_end_date, err_msg="Specified train_end_date is after today!")
 
-    x_deal_onboard_train, y = u.get_historical_deals_onboard(train_start_date, train_end_date)
+    if historical_deals_onboard_fp is None:
+        x_deal_onboard_train, y = u.get_historical_deals_onboard(train_start_date, train_end_date)
+    else:
+        x_deal_onboard_train, y = u.get_historical_deals_onboard_offline(train_start_date, train_end_date, historical_deals_onboard_fp)
     y_deal_onboard_train = jnp.array(y)
     u.err_check_train_data(y_deal_onboard_train)
 
