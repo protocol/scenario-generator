@@ -122,6 +122,7 @@ def forecast_rb_onboard_power(train_start_date: datetime.date,
                                          seasonality_mcmc=seasonality_mcmc, 
                                          num_chains_mcmc=num_chains_mcmc)
     rb_onboard_power_pred *= y_scale
+    rb_onboard_power_pred = jnp.clip(rb_onboard_power_pred, 0)
     
     forecast_start_date = train_end_date + datetime.timedelta(days=1)
     forecast_date_vec = u.make_forecast_date_vec(forecast_start_date, forecast_length)
@@ -164,6 +165,7 @@ def forecast_extensions(train_start_date: datetime.date,
                                    num_samples_mcmc=num_samples_mcmc,
                                    seasonality_mcmc=seasonality_mcmc, 
                                    num_chains_mcmc=num_chains_mcmc)
+    extensions_pred = jnp.clip(extensions_pred, 0)
     
     forecast_start_date = train_end_date + datetime.timedelta(days=1)
     forecast_date_vec = u.make_forecast_date_vec(forecast_start_date, forecast_length)
@@ -192,6 +194,7 @@ def forecast_expirations(train_start_date: datetime.date,
                                num_samples_mcmc=num_samples_mcmc,
                                seasonality_mcmc=seasonality_mcmc, 
                                num_chains_mcmc=num_chains_mcmc)
+    expire_pred = jnp.clip(expire_pred, 0)
     
     forecast_start_date = train_end_date + datetime.timedelta(days=1)
     forecast_date_vec = u.make_forecast_date_vec(forecast_start_date, forecast_length)
@@ -227,6 +230,7 @@ def forecast_renewal_rate(train_start_date: datetime.date,
                                                               historical_expirations_fp = historical_expirations_fp)
     if not x_extend.equals(x_expire):
         raise ValueError("Unable to get the same amount of data for extensions and expirations!")
+    # TODO: div/0 projection
     renewal_rate_historical = y_extend / (y_extend + y_expire)
 
     renewal_rate_pred = extensions_pred / (extensions_pred + expire_pred)

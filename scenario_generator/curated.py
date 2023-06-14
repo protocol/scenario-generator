@@ -29,6 +29,16 @@ def smooth_fast_exponential_change_and_plateau(start_value: float,
     x = np.concatenate([x1, x2])
     return x
 
+def linear_increase_and_plateau(start_value: float,
+                                target_value: float,
+                                forecast_length: int,
+                                num_days_to_target: int):
+    t = np.arange(forecast_length)
+    x1 = np.linspace(start_value, target_value, num_days_to_target)
+    x2 = target_value * np.ones(forecast_length - num_days_to_target)
+    x = np.concatenate([x1, x2])
+    return x
+
 def forecast_historical_median_renewal_rate(start_date: datetime.date,
                                             end_date: datetime.date,
                                             forecast_length: int):
