@@ -230,10 +230,11 @@ def forecast_renewal_rate(train_start_date: datetime.date,
                                                               historical_expirations_fp = historical_expirations_fp)
     if not x_extend.equals(x_expire):
         raise ValueError("Unable to get the same amount of data for extensions and expirations!")
-    # TODO: div/0 projection
     renewal_rate_historical = y_extend / (y_extend + y_expire)
 
     renewal_rate_pred = extensions_pred / (extensions_pred + expire_pred)
+    renewal_rate_pred = jnp.clip(jnp.nan_to_num(renewal_rate_pred, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0)
+
     return forecast_date_vec, renewal_rate_pred, x_extend, renewal_rate_historical
 
 
@@ -300,5 +301,6 @@ def forecast_filplus_rate(train_start_date: datetime.date,
     xx = x_rb_onboard_train
     yy = y_deal_onboard_train / (y_cc_onboard_train + y_deal_onboard_train)
     filplus_rate_pred = deal_onboard_pred / (cc_onboard_pred + deal_onboard_pred)
+    filplus_rate_pred = jnp.clip(filplus_rate_pred, 0.0, 1.0)
     return forecast_date_vec, filplus_rate_pred, xx, yy
 
