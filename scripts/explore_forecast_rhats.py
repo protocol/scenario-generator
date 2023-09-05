@@ -26,13 +26,7 @@ import numpyro.distributions as dist
 import scenario_generator.mcmc_forecast as mcmc
 import scenario_generator.utils as u
 
-import mechafil.minting as minting
-import mechafil.data as mecha_data
-from mechafil.data import get_historical_network_stats, get_sector_expiration_stats, setup_spacescope
-from mechafil.power import forecast_power_stats, build_full_power_stats_df, scalar_or_vector_to_vector
-from mechafil.vesting import compute_vesting_trajectory_df
-from mechafil.minting import compute_minting_trajectory_df
-from mechafil.supply import forecast_circulating_supply_df
+import pystarboard.data
 
 from cel_utils import disk_utils
 
@@ -108,7 +102,7 @@ if __name__ == '__main__':
     if not os.path.isfile(args.auth):
         print('Auth file not found')
         exit(1)
-    setup_spacescope(args.auth)
+    pystarboard.data.setup_spacescope(args.auth)
 
     offline_info_dir = 'explore_rhat_execdate_%s' % (current_date,)
     os.makedirs(offline_info_dir, exist_ok=True)
