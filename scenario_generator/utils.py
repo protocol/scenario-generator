@@ -5,9 +5,6 @@ import numpy as np
 
 import jax.numpy as jnp
 
-# from mechafil.data import query_daily_power_onboarded, \
-#                           query_sector_expirations
-# import mechafil.data
 import pystarboard.data
 
 PIB = 2**50

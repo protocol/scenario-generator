@@ -14,7 +14,6 @@ install_requires = ['numpy',
                     'pandas',
                     'numpyro',
                     'jax',
-                    'mechaFIL',
                     ]
 
 setuptools.setup(
