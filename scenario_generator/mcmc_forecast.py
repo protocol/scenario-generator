@@ -47,6 +47,7 @@ def sgt(y, seasonality, future=0):
 
     level_sm = numpyro.sample("level_sm", dist.Beta(1, 2))
     s_sm = numpyro.sample("s_sm", dist.Uniform(0, 1))
+    # print(y[:seasonality] * 0.3)
     init_s = numpyro.sample("init_s", dist.Cauchy(0, y[:seasonality] * 0.3))
 
     def transition_fn(carry, t):
@@ -327,7 +328,7 @@ def forecast_filplus_rate(train_start_date: datetime.date,
     forecast_date_vec = u.make_forecast_date_vec(forecast_start_date, forecast_length)
     deal_onboard_pred *= y_deal_onboard_scale
 
-    y_cc_onboard_train = jnp.array(y_rb_onboard_train - y_deal_onboard_train)
+    y_cc_onboard_train = jnp.clip(jnp.array(y_rb_onboard_train - y_deal_onboard_train), a_min=0.001)
     # y_cc_onboard_scale = y_cc_onboard_train.max()
     y_cc_onboard_scale = 1
     cc_onboard_pred, cc_onboard_pred_rhats = mcmc_predict(y_cc_onboard_train/y_cc_onboard_scale, forecast_length,
@@ -341,7 +342,7 @@ def forecast_filplus_rate(train_start_date: datetime.date,
     xx = x_rb_onboard_train
     yy = y_deal_onboard_train / (y_cc_onboard_train + y_deal_onboard_train)
     filplus_rate_pred = deal_onboard_pred / (cc_onboard_pred + deal_onboard_pred)
-    filplus_rate_pred = jnp.clip(filplus_rate_pred, 0.0, 1.0)
+    filplus_rate_pred = jnp.clip(jnp.nan_to_num(filplus_rate_pred, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0)
     return forecast_date_vec, filplus_rate_pred, xx, yy, deal_onboard_pred_rhats, cc_onboard_pred_rhats
 
 def characterize_mcmc_forecast(
